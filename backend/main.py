@@ -10,8 +10,13 @@ from app.routers import health as health_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        # DB may be unreachable at startup (e.g. no DATABASE_URL set yet).
+        # The app still starts; /health/db will report the live status.
+        pass
     yield
 
 
