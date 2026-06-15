@@ -1,518 +1,261 @@
-# JobSense AI — Project Brief for Claude Code
+# JobSense AI
 
-## Project Overview
-Build **JobSense**, an open source AI-powered career management assistant that helps job seekers intelligently discover, evaluate, and pursue job opportunities. It uses LangGraph agents, MCP server integrations, FastAPI backend, React frontend, SQLite database, and Claude LLM.
+A self-hosted AI career management assistant for technical professionals. JobSense automatically ingests recruiter opportunities, scores fit against your resume, detects contract conflicts, and tracks your full job pipeline — so you can focus on decisions, not administration.
 
-**GitHub Repo Name:** `jobsense-ai`
-**License:** MIT
-**Deployment Target:** Render (free tier)
+Built with FastAPI, React, LangGraph, and Claude.
 
 ---
 
-## Problem Statement
-Job seekers today receive high volumes of recruiter outreach across multiple channels but have no intelligent system to track, evaluate, and manage these opportunities. They manually assess job fit, miss follow-ups, and have no way to automatically detect contract conflicts or compliance risks. This leads to missed opportunities, wasted time, and potentially serious contractual violations.
+## What it does
 
-JobSense solves this by automatically ingesting opportunities from emails and manual entry, scoring fit against the user's resume, flagging contract conflicts, tracking every stage of the process, and providing AI-powered career suggestions — all through a simple web interface.
+- **Ingests opportunities** from recruiter emails (Gmail MCP) and manual entry
+- **Scores resume fit** 1–10 against each job, with a plain-language explanation
+- **Detects contract conflicts** across four categories: same end-client, same staffing vendor, non-compete by industry, non-compete by geography
+- **Tracks the full pipeline** from discovery through offer, with active/archive board separation
+- **Discovers jobs proactively** via Brave Search based on your preferences
+- **Searches on demand** with natural-language queries — results ranked by fit score
+- **Generates tailored cover letters** on demand; you review and submit manually
+- **Deduplicates across all sources** — the same job is never added twice
+- **Explains every decision** — all agent reasoning is logged and browsable
+
+JobSense is a single-user personal tool. It is not a multi-tenant SaaS and does not auto-submit applications.
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React + Tailwind CSS |
-| Backend | FastAPI (Python) |
-| Agent Framework | LangGraph |
-| LLM | Claude (claude-sonnet-4-6) via Anthropic API |
-| MCP Servers | Gmail MCP, Brave Search MCP, Filesystem MCP, Google Calendar MCP, Google Drive MCP |
-| Database | SQLite |
-| Deployment | Render (free tier) |
+| Backend | FastAPI (Python 3.11) + SQLAlchemy 2.0 async |
+| Database | PostgreSQL via asyncpg + Alembic migrations |
+| Agent framework | LangGraph |
+| LLM | Claude claude-sonnet-4-6 via Anthropic API |
+| MCP integrations | Gmail, Brave Search, Filesystem, Google Calendar, Google Drive |
+| Frontend | React + Vite + Tailwind CSS |
+| Deployment | Render free tier |
 
 ---
 
-## MCP Server Integrations
+## Prerequisites
 
-### 1. Gmail MCP
-- Auto-reads recruiter emails
-- Extracts job details from email body
-- Identifies recruiter name, company, role, and contact info
-- Triggers job ingestion pipeline automatically
-- MCP URL: https://gmailmcp.googleapis.com/mcp/v1
-
-### 2. Brave Search MCP
-- Daily job discovery across the web
-- Company research when a new job is added
-- Latest news about target companies
-- Salary benchmarking searches
-
-### 3. Filesystem MCP
-- Reads uploaded resume file
-- Stores and retrieves job descriptions locally
-- Saves cover letters and application drafts
-- Manages exported reports
-
-### 4. Google Calendar MCP
-- Auto-schedule interview reminders
-- Track follow-up dates
-- Block prep time before interviews
-- MCP URL: https://calendarmcp.googleapis.com/mcp/v1
-
-### 5. Google Drive MCP
-- Store resume versions
-- Save cover letters
-- Share job tracker exports
-- MCP URL: https://drivemcp.googleapis.com/mcp/v1
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL (local or hosted)
+- [uv](https://docs.astral.sh/uv/) — Python package manager (`pip install uv`)
 
 ---
 
-## LangGraph Agent Architecture
+## Quick start
 
-### Agent Nodes
+### 1. Clone the repo
 
-1. **intake_node** — Receives job from Gmail MCP or manual entry, extracts structured data
-2. **research_node** — Uses Brave Search MCP to research company, role, salary benchmarks
-3. **scoring_node** — Scores resume fit against job description (1-10) with explanation
-4. **conflict_detection_node** — Checks job against user's contract restrictions and flags risks
-5. **suggestions_node** — Generates personalized career advice and skill gap recommendations
-6. **cover_letter_node** — Drafts tailored cover letter for Smart Apply
-7. **evaluation_node** — Logs all agent decisions, scores accuracy, tracks performance
-8. **orchestrator_node** — Routes between nodes based on state and user action
-
-### State Schema
-```python
-class JobSenseState(TypedDict):
-    job_id: str
-    raw_input: str  # email or manual entry
-    job_details: dict  # title, company, vendor, client, tech_stack, salary, location, type
-    resume_text: str
-    fit_score: float
-    fit_explanation: str
-    conflict_level: str  # green / yellow / red
-    conflict_reasons: list
-    suggestions: list
-    cover_letter: str
-    agent_decisions: list  # for observability
-    errors: list
+```bash
+git clone https://github.com/MisSwa/JobSense.git
+cd JobSense
 ```
 
-### Graph Flow
-```
-intake_node → research_node → scoring_node → conflict_detection_node → suggestions_node → evaluation_node
-                                                                    ↓
-                                                          cover_letter_node (on demand)
-```
+### 2. Configure environment variables
 
----
-
-## Database Schema (SQLite)
-
-### users
-```sql
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    resume_text TEXT,
-    resume_file_path TEXT,
-    created_at TIMESTAMP
-);
+```bash
+cp .env.example backend/.env
 ```
 
-### user_preferences
-```sql
-CREATE TABLE user_preferences (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    target_titles TEXT,  -- JSON array
-    seniority_levels TEXT,  -- JSON array: junior/mid/senior/lead/principal
-    employment_types TEXT,  -- JSON array: FTE/contract/contract-to-hire/part-time
-    remote_preference TEXT,  -- remote/hybrid/onsite
-    target_locations TEXT,  -- JSON array
-    min_salary INTEGER,
-    target_industries TEXT,  -- JSON array
-    avoid_industries TEXT,  -- JSON array
-    target_companies TEXT,  -- JSON array
-    blacklisted_companies TEXT,  -- JSON array
-    current_skills TEXT,  -- JSON array
-    target_skills TEXT,  -- JSON array
-    avoid_skills TEXT,  -- JSON array
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
+Edit `backend/.env` and fill in your values:
+
 ```
-
-### contract_restrictions
-```sql
-CREATE TABLE contract_restrictions (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    current_client TEXT,  -- e.g. Bank of America
-    current_vendor TEXT,  -- e.g. TEKsystems
-    restricted_clients TEXT,  -- JSON array
-    restricted_vendors TEXT,  -- JSON array
-    non_compete_details TEXT,
-    restriction_end_date DATE,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-```
-
-### jobs
-```sql
-CREATE TABLE jobs (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    title TEXT,
-    company TEXT,
-    vendor TEXT,
-    client TEXT,
-    tech_stack TEXT,  -- JSON array
-    salary_min INTEGER,
-    salary_max INTEGER,
-    location TEXT,
-    employment_type TEXT,
-    remote_type TEXT,
-    job_description TEXT,
-    source TEXT,  -- gmail/brave_search/manual
-    source_url TEXT,
-    recruiter_name TEXT,
-    recruiter_email TEXT,
-    fit_score REAL,
-    fit_explanation TEXT,
-    conflict_level TEXT,  -- green/yellow/red
-    conflict_reasons TEXT,  -- JSON array
-    status TEXT,  -- discovered/applied/screening/interview/offer/rejected/withdrawn
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-```
-
-### applications
-```sql
-CREATE TABLE applications (
-    id INTEGER PRIMARY KEY,
-    job_id INTEGER,
-    user_id INTEGER,
-    cover_letter TEXT,
-    applied_at TIMESTAMP,
-    follow_up_date DATE,
-    notes TEXT,
-    FOREIGN KEY (job_id) REFERENCES jobs(id)
-);
-```
-
-### interviews
-```sql
-CREATE TABLE interviews (
-    id INTEGER PRIMARY KEY,
-    job_id INTEGER,
-    user_id INTEGER,
-    interview_date TIMESTAMP,
-    interview_type TEXT,  -- phone/video/onsite/technical
-    interviewer_name TEXT,
-    notes TEXT,
-    scorecard TEXT,  -- JSON
-    outcome TEXT,  -- passed/failed/pending
-    FOREIGN KEY (job_id) REFERENCES jobs(id)
-);
-```
-
-### agent_logs
-```sql
-CREATE TABLE agent_logs (
-    id INTEGER PRIMARY KEY,
-    job_id INTEGER,
-    node_name TEXT,
-    input_data TEXT,  -- JSON
-    output_data TEXT,  -- JSON
-    decision_reasoning TEXT,
-    execution_time_ms INTEGER,
-    error TEXT,
-    created_at TIMESTAMP
-);
-```
-
-### suggestions
-```sql
-CREATE TABLE suggestions (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    suggestion_type TEXT,  -- skill_gap/resume_keyword/interview_prep/career_advice
-    content TEXT,
-    related_job_id INTEGER,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP
-);
-```
-
----
-
-## API Endpoints (FastAPI)
-
-### Auth
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-
-### User Profile
-- `GET /api/profile`
-- `PUT /api/profile`
-- `POST /api/profile/resume` — upload resume
-- `GET /api/profile/preferences`
-- `PUT /api/profile/preferences`
-- `GET /api/profile/restrictions`
-- `PUT /api/profile/restrictions`
-
-### Jobs
-- `GET /api/jobs` — list all jobs with filters
-- `POST /api/jobs` — manual job entry
-- `GET /api/jobs/{id}` — job details
-- `PUT /api/jobs/{id}/status` — update pipeline status
-- `DELETE /api/jobs/{id}`
-- `POST /api/jobs/discover` — trigger Brave Search discovery
-- `POST /api/jobs/sync-gmail` — trigger Gmail MCP sync
-
-### Applications
-- `POST /api/jobs/{id}/apply` — Smart Apply
-- `GET /api/jobs/{id}/cover-letter` — generate cover letter
-- `PUT /api/applications/{id}`
-
-### Interviews
-- `POST /api/jobs/{id}/interviews`
-- `PUT /api/interviews/{id}`
-- `POST /api/interviews/{id}/scorecard`
-
-### Suggestions
-- `GET /api/suggestions`
-- `PUT /api/suggestions/{id}/read`
-- `GET /api/suggestions/weekly-summary`
-
-### Observability
-- `GET /api/agent-logs` — view all agent decisions
-- `GET /api/agent-logs/{job_id}` — decisions for specific job
-- `GET /api/analytics/fit-score-accuracy`
-- `GET /api/analytics/pipeline-summary`
-
----
-
-## Frontend Pages (React + Tailwind)
-
-### 1. Dashboard
-- Pipeline summary (counts by status)
-- Recent jobs discovered
-- Pending follow-ups
-- Weekly suggestions summary
-- Agent performance metrics
-
-### 2. Jobs Board
-- Kanban view by pipeline stage
-- Filter by fit score, conflict level, employment type
-- Color coded conflict indicators 🟢🟡🔴
-- Sort by fit score, date, salary
-
-### 3. Job Detail Page
-- Full job description
-- Fit score with explanation
-- Conflict detection results
-- Skills match/gap breakdown
-- Recruiter contact info
-- Timeline of all activity
-- Smart Apply button
-- Interview notes section
-
-### 4. Discover Page
-- Search preferences input
-- Trigger manual discovery
-- Gmail sync button
-- Discovery history
-
-### 5. Profile & Preferences
-- Resume upload
-- Role preferences form
-- Skills profile
-- Contract restrictions
-- Company blacklist/target list
-
-### 6. Suggestions Page
-- All AI suggestions
-- Filtered by type
-- Weekly summary report
-
-### 7. Observability Dashboard
-- Agent decision log
-- Fit score accuracy over time
-- Node performance metrics
-- Error tracking
-
----
-
-## Module Breakdown & Build Phases
-
-### Phase 1 — Foundation (Week 1-2)
-- [ ] Project setup — FastAPI, React, SQLite
-- [ ] Database schema creation
-- [ ] Basic React UI with navigation
-- [ ] Resume upload and text parsing
-- [ ] User preference profile setup
-- [ ] Manual job entry form
-- [ ] Basic job list view
-
-### Phase 2 — Intelligence (Week 3-4)
-- [ ] LangGraph agent setup
-- [ ] Resume fit scoring node
-- [ ] Contract conflict detection node
-- [ ] Job details extraction node
-- [ ] Agent logging to SQLite
-
-### Phase 3 — MCP Discovery (Week 5-6)
-- [ ] Brave Search MCP integration
-- [ ] Gmail MCP integration
-- [ ] Auto job ingestion pipeline
-- [ ] Deduplication logic
-- [ ] Google Drive MCP for resume storage
-- [ ] Google Calendar MCP for interview scheduling
-
-### Phase 4 — Smart Apply (Week 7)
-- [ ] Cover letter generation node
-- [ ] One click apply flow
-- [ ] Application status tracking
-- [ ] Follow-up reminder system
-
-### Phase 5 — Suggestions Engine (Week 8-9)
-- [ ] Skill gap recommendations
-- [ ] Resume keyword suggestions
-- [ ] Weekly performance summary
-- [ ] Career advice module
-- [ ] Interview prep tips
-
-### Phase 6 — Evaluation & Polish (Week 10)
-- [ ] Observability dashboard
-- [ ] Fit score accuracy tracking
-- [ ] Error handling and fallbacks
-- [ ] UI polish
-- [ ] README and documentation
-- [ ] Deploy to Render
-
----
-
-## Project Structure
-```
-jobsense-ai/
-├── backend/
-│   ├── main.py                  # FastAPI app entry point
-│   ├── database.py              # SQLite connection and setup
-│   ├── models/                  # SQLAlchemy models
-│   │   ├── user.py
-│   │   ├── job.py
-│   │   ├── application.py
-│   │   ├── interview.py
-│   │   └── agent_log.py
-│   ├── routers/                 # FastAPI route handlers
-│   │   ├── auth.py
-│   │   ├── profile.py
-│   │   ├── jobs.py
-│   │   ├── applications.py
-│   │   ├── interviews.py
-│   │   ├── suggestions.py
-│   │   └── analytics.py
-│   ├── agents/                  # LangGraph agents
-│   │   ├── graph.py             # Main LangGraph graph
-│   │   ├── nodes/
-│   │   │   ├── intake.py
-│   │   │   ├── research.py
-│   │   │   ├── scoring.py
-│   │   │   ├── conflict.py
-│   │   │   ├── suggestions.py
-│   │   │   ├── cover_letter.py
-│   │   │   └── evaluation.py
-│   │   └── state.py             # JobSenseState TypedDict
-│   ├── mcp/                     # MCP server connections
-│   │   ├── gmail.py
-│   │   ├── brave_search.py
-│   │   ├── filesystem.py
-│   │   ├── calendar.py
-│   │   └── drive.py
-│   └── utils/
-│       ├── resume_parser.py
-│       └── deduplication.py
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── JobsBoard.jsx
-│   │   │   ├── JobDetail.jsx
-│   │   │   ├── Discover.jsx
-│   │   │   ├── Profile.jsx
-│   │   │   ├── Suggestions.jsx
-│   │   │   └── Observability.jsx
-│   │   ├── components/
-│   │   │   ├── JobCard.jsx
-│   │   │   ├── FitScoreBadge.jsx
-│   │   │   ├── ConflictIndicator.jsx
-│   │   │   ├── PipelineKanban.jsx
-│   │   │   └── AgentLogTable.jsx
-│   │   └── App.jsx
-│   └── package.json
-├── .env.example
-├── requirements.txt
-├── README.md
-├── CONTRIBUTING.md
-└── LICENSE
-```
-
----
-
-## Environment Variables
-```
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/jobsense
 ANTHROPIC_API_KEY=your_key_here
 BRAVE_SEARCH_API_KEY=your_key_here
 GOOGLE_CLIENT_ID=your_key_here
 GOOGLE_CLIENT_SECRET=your_key_here
-DATABASE_URL=sqlite:///./jobsense.db
-SECRET_KEY=your_secret_key
+```
+
+### 3. Set up the database
+
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
+### 4. Start the backend
+
+```bash
+# from backend/
+uv run uvicorn main:app --reload --port 8000
+```
+
+Verify: `curl http://localhost:8000/health` → `{"status":"ok","version":"0.1.0"}`
+DB check: `curl http://localhost:8000/health/db` → `{"status":"ok","db":"connected"}`
+
+### 5. Start the frontend
+
+```bash
+# from frontend/
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` — you should see the nav shell with a green API badge and a green Database Connected badge on the Dashboard.
+
+---
+
+## Project structure
+
+```
+JobSense/
+├── backend/
+│   ├── main.py                  # FastAPI app, lifespan, CORS, routers
+│   ├── alembic/                 # Database migrations
+│   │   └── versions/            # Migration files
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── config.py        # DATABASE_URL from .env
+│   │   │   └── database.py      # Async engine, session factory, get_db
+│   │   ├── models/              # SQLAlchemy ORM models
+│   │   │   ├── user.py
+│   │   │   ├── job.py           # Status, employment type, conflict level enums
+│   │   │   ├── suggestion.py
+│   │   │   ├── agent_log.py
+│   │   │   ├── application.py
+│   │   │   ├── interview.py
+│   │   │   └── feedback.py
+│   │   └── routers/
+│   │       └── health.py        # GET /health/db
+│   └── tests/
+│       └── test_health.py       # 4 pytest tests (200, status, version, CORS)
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   └── NavShell.jsx     # Nav bar + live API health badge
+│       ├── hooks/
+│       │   ├── useHealth.js     # Fetches GET /health
+│       │   └── useHealthDb.js   # Fetches GET /health/db
+│       └── pages/
+│           ├── Dashboard.jsx    # DB status badge
+│           ├── Jobs.jsx
+│           ├── Discover.jsx
+│           ├── Profile.jsx
+│           ├── Suggestions.jsx
+│           ├── Observability.jsx
+│           └── Search.jsx
+├── specs/                       # Phase specs (plan, requirements, validation)
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
-## Key Design Principles
-1. **Evaluation first** — every agent decision is logged and explainable
-2. **User in control** — agent assists, human decides
-3. **Privacy conscious** — all data stored locally in SQLite
-4. **Conflict aware** — contract restrictions are first class citizens
-5. **Production grade** — proper error handling, fallbacks, and observability throughout
-6. **Open source friendly** — clean code, good docs, welcoming to contributors
+## Database schema
+
+Seven tables managed by Alembic migrations:
+
+| Table | Purpose |
+|---|---|
+| `users` | Resume text, file path, preferences (JSONB), contract restrictions (JSONB) |
+| `jobs` | Full job details, fit score, conflict level, pipeline status, dedup hash |
+| `suggestions` | AI-generated skill gap / resume / interview / career suggestions |
+| `agent_logs` | Full input/output/reasoning for every agent node execution |
+| `applications` | Cover letter, notes, follow-up date per job |
+| `interviews` | Interview date, type, scorecard, outcome |
+| `feedback` | User accuracy rating (1–5) on fit scores after terminal outcomes |
 
 ---
 
-## README Sections to Include
-1. What is JobSense
-2. Demo screenshot/gif
-3. Features list
-4. Tech stack
-5. Architecture diagram
-6. Quick start guide
-7. Environment setup
-8. Contributing guide
-9. Roadmap
-10. License
+## Agent architecture
+
+LangGraph graph with `JobSenseState` flowing through all nodes:
+
+```
+intake → research → scoring → conflict_detection → suggestions → evaluation
+                                                         ↓
+                                               cover_letter (on demand)
+```
+
+| Node | Does |
+|---|---|
+| `intake_node` | Extracts structured fields from raw job text |
+| `research_node` | Company research and salary benchmarks via Brave Search |
+| `scoring_node` | Scores resume fit 1–10 with plain-language explanation |
+| `conflict_detection_node` | Checks four conflict types against stored restrictions |
+| `suggestions_node` | Generates skill gap, resume keyword, interview prep suggestions |
+| `cover_letter_node` | Drafts a tailored cover letter on demand |
+| `evaluation_node` | Logs all decisions; powers the Observability page |
+
+Every node logs to `agent_logs` — inputs, outputs, reasoning, and execution time.
 
 ---
 
-## LinkedIn Posts Plan
-- **Post 1** — Project announcement with problem statement
-- **Post 2** — Gmail MCP pulling recruiter emails automatically
-- **Post 3** — Fit scoring working with explanation
-- **Post 4** — Conflict detection demo
-- **Post 5** — Launch post with GitHub link
+## MCP integrations
+
+All MCP servers run locally via stdio using `langchain-mcp-adapters`. Commands are configured via environment variables so you can point to your own server binaries.
+
+| Integration | Role |
+|---|---|
+| Gmail MCP | Parse recruiter emails, extract structured job details |
+| Brave Search MCP | Job discovery, company research, salary benchmarks |
+| Filesystem MCP | Resume file access, cover letter drafts |
+| Google Calendar MCP | Interview scheduling, follow-up reminders |
+| Google Drive MCP | Cover letter and resume version storage |
+
+Configure the commands in `backend/.env`:
+
+```
+GMAIL_MCP_COMMAND=
+BRAVE_MCP_COMMAND=
+FILESYSTEM_MCP_COMMAND=
+CALENDAR_MCP_COMMAND=
+DRIVE_MCP_COMMAND=
+```
 
 ---
 
-## Instructions for Claude Code
-1. Start with Phase 1 — set up the project structure exactly as shown above
-2. Use Python 3.11+
-3. Use SQLAlchemy for database ORM
-4. Use LangGraph for agent orchestration
-5. Use langchain-mcp-adapters for MCP connections
-6. Every agent node must log its decisions to agent_logs table
-7. All API responses must include proper error handling
-8. React frontend must use Tailwind CSS utility classes only
-9. Follow the state schema exactly as defined
-10. Build evaluation and observability from day one — not as an afterthought
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (`postgresql+asyncpg://...`) |
+| `ANTHROPIC_API_KEY` | Yes (Phase 11+) | Claude API key |
+| `BRAVE_SEARCH_API_KEY` | Yes (Phase 17+) | Brave Search API key |
+| `GOOGLE_CLIENT_ID` | Yes (Phase 18+) | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes (Phase 18+) | Google OAuth client secret |
+| `GMAIL_MCP_COMMAND` | Yes (Phase 18+) | Shell command to start Gmail MCP server |
+| `BRAVE_MCP_COMMAND` | Yes (Phase 17+) | Shell command to start Brave Search MCP server |
+| `FILESYSTEM_MCP_COMMAND` | Yes (Phase 19+) | Shell command to start Filesystem MCP server |
+| `CALENDAR_MCP_COMMAND` | Yes (Phase 20+) | Shell command to start Calendar MCP server |
+| `DRIVE_MCP_COMMAND` | Yes (Phase 21+) | Shell command to start Drive MCP server |
+
+---
+
+## Build status
+
+| Phase | Description | Status |
+|---|---|---|
+| 0 | FastAPI + React scaffold, `GET /health`, nav shell | Done |
+| 1 | PostgreSQL, SQLAlchemy models, Alembic, `GET /health/db` | Done |
+| 2 | Resume upload — PDF/DOCX parsing, stored text | Planned |
+| 3 | User preferences form | Planned |
+| 4 | Contract restrictions form | Planned |
+| 5 | Manual job entry | Planned |
+| 6 | Job list view with filters | Planned |
+| 7 | Job detail page | Planned |
+| 8 | Job status update | Planned |
+| 9 | Delete job | Planned |
+| 10 | LangGraph graph scaffold + Observability page | Planned |
+| 11+ | Agent nodes, MCP integrations, cover letters, analytics | Planned |
+
+Full roadmap in [`specs/roadmap.md`](specs/roadmap.md).
+
+---
+
+## Running tests
+
+```bash
+cd backend
+uv run pytest tests/ -v
+```
+
+---
+
+## License
+
+MIT
