@@ -9,6 +9,7 @@ from app.core.database import engine, get_session_factory
 from app.models import Base
 from app.models.user import User
 from app.routers import health as health_router
+from app.routers import jobs as jobs_router
 from app.routers import profile as profile_router
 
 
@@ -39,6 +40,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router.router)
+app.include_router(jobs_router.router, prefix="/api")
 app.include_router(profile_router.router, prefix="/api")
 
 
