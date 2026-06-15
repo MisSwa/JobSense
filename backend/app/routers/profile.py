@@ -10,12 +10,10 @@ from app.utils.resume_parser import extract_text_from_pdf, extract_text_from_doc
 
 router = APIRouter()
 
-ALLOWED_TYPES = {
-    "application/pdf": (".pdf", extract_text_from_pdf),
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
-        ".docx",
-        extract_text_from_docx,
-    ),
+# Keyed by file extension — more reliable than content_type which browsers/curl may misreport
+ALLOWED_EXTENSIONS = {
+    ".pdf": extract_text_from_pdf,
+    ".docx": extract_text_from_docx,
 }
 
 
@@ -33,14 +31,14 @@ async def upload_resume(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    content_type = file.content_type or ""
-    if content_type not in ALLOWED_TYPES:
+    ext = Path(file.filename or "").suffix.lower()
+    extractor = ALLOWED_EXTENSIONS.get(ext)
+    if extractor is None:
         raise HTTPException(
             status_code=422,
             detail="Unsupported file type. Upload a PDF or DOCX.",
         )
 
-    ext, extractor = ALLOWED_TYPES[content_type]
     upload_path = Path("uploads") / f"resume{ext}"
 
     contents = await file.read()
