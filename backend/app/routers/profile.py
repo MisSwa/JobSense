@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.preferences import Preferences
 from app.utils.resume_parser import extract_text_from_pdf, extract_text_from_docx
 
 router = APIRouter()
@@ -15,6 +16,14 @@ ALLOWED_EXTENSIONS = {
     ".pdf": extract_text_from_pdf,
     ".docx": extract_text_from_docx,
 }
+
+
+async def _get_user(db: AsyncSession) -> User:
+    result = await db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=500, detail="User record not found.")
+    return user
 
 
 @router.get("/profile")
@@ -49,13 +58,30 @@ async def upload_resume(
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Failed to extract text: {e}")
 
-    result = await db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=500, detail="User record not found.")
-
+    user = await _get_user(db)
     user.resume_text = resume_text
     user.resume_file_path = str(upload_path)
     await db.commit()
 
     return {"resume_text": resume_text}
+
+
+@router.get("/profile/preferences", response_model=Preferences, response_model_exclude_none=True)
+async def get_preferences(db: AsyncSession = Depends(get_db)):
+    user = await _get_user(db)
+    if not user.preferences:
+        return Preferences()
+    return Preferences(**user.preferences)
+
+
+@router.put("/profile/preferences", response_model=Preferences, response_model_exclude_none=True)
+async def put_preferences(
+    body: Preferences,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _get_user(db)
+    existing = user.preferences or {}
+    merged = {**existing, **body.model_dump(exclude_none=True)}
+    user.preferences = merged
+    await db.commit()
+    return Preferences(**merged)
