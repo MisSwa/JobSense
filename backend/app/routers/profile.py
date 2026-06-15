@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.preferences import Preferences
+from app.schemas.restrictions import Restrictions
 from app.utils.resume_parser import extract_text_from_pdf, extract_text_from_docx
 
 router = APIRouter()
@@ -85,3 +86,24 @@ async def put_preferences(
     user.preferences = merged
     await db.commit()
     return Preferences(**merged)
+
+
+@router.get("/profile/restrictions", response_model=Restrictions, response_model_exclude_none=True)
+async def get_restrictions(db: AsyncSession = Depends(get_db)):
+    user = await _get_user(db)
+    if not user.restrictions:
+        return Restrictions()
+    return Restrictions(**user.restrictions)
+
+
+@router.put("/profile/restrictions", response_model=Restrictions, response_model_exclude_none=True)
+async def put_restrictions(
+    body: Restrictions,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _get_user(db)
+    existing = user.restrictions or {}
+    merged = {**existing, **body.model_dump(exclude_none=True)}
+    user.restrictions = merged
+    await db.commit()
+    return Restrictions(**merged)
