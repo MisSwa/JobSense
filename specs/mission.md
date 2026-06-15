@@ -1,7 +1,7 @@
 # JobSense AI — Mission
 
-**Version:** 1.0
-**Date:** 2026-06-14
+**Version:** 1.1
+**Date:** 2026-06-14 (updated 2026-06-14)
 
 ---
 
@@ -23,6 +23,10 @@ JobSense is a self-hosted, open source career management assistant. It:
 - **Tracks the full pipeline** from discovery through offer, with a kanban-style board
 - **Generates tailored cover letters** on demand — user reviews and submits manually
 - **Discovers new opportunities** proactively via Brave Search based on user preferences
+- **Searches for jobs on demand** via a natural-language search interface — results are auto-scored against the resume and ranked by fit score before display
+- **Enables Quick Apply from search results** — generates a cover letter and saves the job to the pipeline in one click, without leaving the search page
+- **Deduplicates across all sources** — the same job is never added twice whether it arrives via Gmail, Brave Search, or manual entry; manual duplicates surface a friendly warning with a link to the existing job
+- **Keeps the active pipeline clean** — applied, rejected, and withdrawn jobs automatically move to an archive view so the active board shows only live opportunities
 - **Suggests improvements** to skills, resume keywords, and interview preparation
 - **Observes itself** — every agent decision is logged, explained, and traceable
 
@@ -49,6 +53,8 @@ JobSense is a personal tool. It is designed and optimized for one user per deplo
 | Zero missed conflicts | Every job flagged for contract risk before the user acts on it |
 | Fit scores that predict outcomes | User feedback shows scores correlate with interview/offer rates over time |
 | Full pipeline visibility | User can see every opportunity and its current status at a glance |
+| No duplicate jobs | The same job from two sources is merged, not duplicated |
+| Active board stays focused | Archive automatically holds closed jobs; active view is never cluttered |
 | Time reclaimed | No manual tracking in spreadsheets or email threads |
 | Explainable AI | User can always see why the agent made a recommendation |
 
