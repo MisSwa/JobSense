@@ -2,8 +2,8 @@
 
 **Granularity:** One endpoint or one component per phase
 **Scope:** Every phase ships something visible in the browser
-**Version:** 1.0
-**Date:** 2026-06-14
+**Version:** 1.1
+**Date:** 2026-06-14 (updated 2026-06-14)
 
 ---
 
@@ -87,6 +87,24 @@
 
 ---
 
+## Phase 9A — Active/Archive Board View
+
+**Backend:** `GET /api/jobs?view=active` returns only Discovered, Screening, Interview, Offer statuses; `GET /api/jobs?view=archive` returns Applied, Rejected, Withdrawn; default `view=active`
+**Frontend:** Active/Archive tab toggle on the Jobs page; active tab is the default; archive tab shows closed jobs with a "Reopen" action that moves the job back to Discovered; count badge on each tab
+**Depends on:** Phase 8 (status update must be working)
+**Deliverable:** Jobs board defaults to active-only view; set a job to Rejected and watch it disappear from active and appear in Archive tab
+
+---
+
+## Phase 9B — Deduplication Engine
+
+**Backend:** Add `dedup_hash` column to jobs table (SHA-256 of `lowercase(company + title + location)`); add `source_url` if not already present; before any job insert — check both `source_url` and `dedup_hash`; `GET /api/jobs/check-duplicate` accepts `url` or `company+title+location` query params and returns `{ is_duplicate: bool, existing_job_id: int | null }`; Gmail sync and Brave Search discovery silently skip duplicates; intake_node updated to call dedup check before inserting
+**Frontend:** Manual job entry form calls `check-duplicate` on submit; if duplicate detected, show inline message "This job is already in your pipeline" with a link to the existing job — form is not submitted
+**Depends on:** Phase 5 (manual job entry), Phase 10+ (intake_node, Gmail MCP, Brave Search)
+**Deliverable:** Enter the same job twice manually — second attempt shows the duplicate warning with a link to the first; sync Gmail with an already-tracked job — it is silently skipped
+
+---
+
 ## Phase 10 — LangGraph Graph Scaffold
 
 **Backend:** LangGraph graph initialized with `JobSenseState`; stub nodes that pass state through; `agent_logs` table wired; `GET /api/agent-logs` returns empty array
@@ -151,6 +169,15 @@
 
 ---
 
+## Phase 17A — Job Search UI
+
+**Backend:** `POST /api/jobs/search` — accepts `{ query, filters: { employment_type, location, seniority, salary_min, salary_max, remote_preference } }`; calls Brave Search MCP; runs each result through `scoring_node` before returning; excludes jobs already in the pipeline (dedup check via `dedup_hash` and `source_url`); returns results sorted by `fit_score` descending; `POST /api/jobs/search` is paginated (page + page_size params)
+**Frontend:** New `/search` route and Search nav link added to `NavShell`; page has a natural-language query input, filter controls (employment type, location, seniority, salary range, remote preference), and a results list of `SearchResultCard` components; each card shows job title, company, location, employment type, fit score badge, conflict indicator; **Save to Pipeline** button adds job with status Discovered; results exclude any jobs already in the pipeline
+**Depends on:** Phase 9B (dedup), Phase 12 (scoring_node), Phase 17 (Brave Search MCP)
+**Deliverable:** Search "Senior AI Engineer remote contract", see results ranked by fit score with conflict indicators; Save a result and confirm it appears in the Jobs board as Discovered
+
+---
+
 ## Phase 18 — Gmail MCP
 
 **Backend:** Gmail MCP wired via `langchain-mcp-adapters`; `POST /api/jobs/sync-gmail` reads unread recruiter emails, parses job details, ingests new jobs with deduplication
@@ -188,6 +215,15 @@
 **Backend:** `cover_letter_node` — generates a tailored cover letter for the job using resume + job description; `GET /api/jobs/{id}/cover-letter` triggers on demand and returns the draft
 **Frontend:** "Generate Cover Letter" button on job detail page; cover letter preview in a readable panel
 **Deliverable:** Generate and preview a tailored cover letter from any job detail page
+
+---
+
+## Phase 22A — Quick Apply from Search
+
+**Backend:** `POST /api/jobs/quick-apply` — accepts raw job details from a search result (not a saved job_id); saves the job to the pipeline with status `applied`; runs `cover_letter_node` via LangGraph; returns `{ job_id, cover_letter }` in a single response; dedup check runs before save — if already in pipeline, returns the existing job's cover letter instead of creating a duplicate; logs to `agent_logs`
+**Frontend:** **Quick Apply** button on each `SearchResultCard`; clicking it calls `POST /api/jobs/quick-apply`; while pending, button shows a spinner and is disabled; on success, opens a `QuickApplyModal` showing the generated cover letter in an editable textarea; modal has a **Copy to clipboard** button and a confirmation message "Copied!"; after copying, modal can be dismissed; the saved job is immediately moved to archive (status = applied) so it no longer appears in active board
+**Depends on:** Phase 17A (Search UI cards exist), Phase 22 (cover_letter_node built), Phase 9A (archive board moves applied jobs out of active view), Phase 9B (dedup before save)
+**Deliverable:** From search results, click Quick Apply on a job; cover letter modal opens with tailored content; copy it; confirm the job now appears in Archive (Applied) not Active board
 
 ---
 
