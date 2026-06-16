@@ -5,6 +5,7 @@ import Jobs from './pages/Jobs'
 import Discover from './pages/Discover'
 import Profile from './pages/Profile'
 import Suggestions from './pages/Suggestions'
+import JobDetail from './pages/JobDetail'
 import Observability from './pages/Observability'
 import Search from './pages/Search'
 
@@ -15,6 +16,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/discover" element={<Discover />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/suggestions" element={<Suggestions />} />
