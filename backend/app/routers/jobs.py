@@ -10,15 +10,25 @@ from app.schemas.job import JobCreate, JobOut, JobStatusUpdate
 
 router = APIRouter()
 
+ACTIVE_STATUSES = [JobStatus.discovered, JobStatus.screening, JobStatus.interview, JobStatus.offer]
+ARCHIVE_STATUSES = [JobStatus.applied, JobStatus.rejected, JobStatus.withdrawn]
+
 
 @router.get("/jobs", response_model=list[JobOut])
 async def list_jobs(
+    view: Optional[str] = Query(default='active'),
     status: Optional[JobStatus] = Query(default=None),
     employment_type: Optional[EmploymentType] = Query(default=None),
     conflict_level: Optional[ConflictLevel] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    if view is not None and view not in ('active', 'archive'):
+        raise HTTPException(status_code=422, detail="view must be 'active' or 'archive'.")
     stmt = select(Job)
+    if view == 'active':
+        stmt = stmt.where(Job.status.in_(ACTIVE_STATUSES))
+    elif view == 'archive':
+        stmt = stmt.where(Job.status.in_(ARCHIVE_STATUSES))
     if status is not None:
         stmt = stmt.where(Job.status == status)
     if employment_type is not None:
