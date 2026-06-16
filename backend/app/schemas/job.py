@@ -22,6 +22,10 @@ class JobCreate(BaseModel):
     raw_text: Optional[str] = None
 
 
+class JobStatusUpdate(BaseModel):
+    status: JobStatus
+
+
 class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

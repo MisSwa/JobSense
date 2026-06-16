@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.job import Job, JobStatus, EmploymentType, ConflictLevel
-from app.schemas.job import JobCreate, JobOut
+from app.schemas.job import JobCreate, JobOut, JobStatusUpdate
 
 router = APIRouter()
 
@@ -36,6 +36,18 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
+    return job
+
+
+@router.put("/jobs/{job_id}/status", response_model=JobOut)
+async def update_job_status(job_id: int, body: JobStatusUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    job.status = body.status
+    await db.commit()
+    await db.refresh(job)
     return job
 
 
