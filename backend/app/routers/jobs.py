@@ -1,11 +1,33 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.job import Job, JobStatus
+from app.models.job import Job, JobStatus, EmploymentType, ConflictLevel
 from app.schemas.job import JobCreate, JobOut
 
 router = APIRouter()
+
+
+@router.get("/jobs", response_model=list[JobOut])
+async def list_jobs(
+    status: Optional[JobStatus] = Query(default=None),
+    employment_type: Optional[EmploymentType] = Query(default=None),
+    conflict_level: Optional[ConflictLevel] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Job)
+    if status is not None:
+        stmt = stmt.where(Job.status == status)
+    if employment_type is not None:
+        stmt = stmt.where(Job.employment_type == employment_type)
+    if conflict_level is not None:
+        stmt = stmt.where(Job.conflict_level == conflict_level)
+    stmt = stmt.order_by(Job.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 @router.post("/jobs", response_model=JobOut, status_code=201)
