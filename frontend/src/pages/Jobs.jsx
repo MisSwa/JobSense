@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useJobs } from '../hooks/useJobs'
 
@@ -9,12 +9,15 @@ const EMPLOYMENT_OPTIONS = [
   { value: 'part_time', label: 'Part-time' },
 ]
 
-const STATUS_OPTIONS = [
+const ACTIVE_STATUS_OPTIONS = [
   { value: 'discovered', label: 'Discovered' },
-  { value: 'applied', label: 'Applied' },
   { value: 'screening', label: 'Screening' },
   { value: 'interview', label: 'Interview' },
   { value: 'offer', label: 'Offer' },
+]
+
+const ARCHIVE_STATUS_OPTIONS = [
+  { value: 'applied', label: 'Applied' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'withdrawn', label: 'Withdrawn' },
 ]
@@ -269,15 +272,78 @@ function JobCard({ job }) {
   )
 }
 
+function ArchiveJobCard({ job, onReopen }) {
+  const [reopening, setReopening] = useState(false)
+  const badgeClass = STATUS_BADGE[job.status] || 'bg-gray-100 text-gray-700'
+  const secondary = [job.company, job.location].filter(Boolean).join(' · ')
+
+  async function handleReopen(e) {
+    e.preventDefault()
+    setReopening(true)
+    await onReopen(job.id)
+    setReopening(false)
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg px-5 py-4 flex items-start justify-between gap-4 hover:border-gray-300 transition-shadow">
+      <Link to={`/jobs/${job.id}`} className="min-w-0 flex-1 block hover:no-underline">
+        <p className="font-semibold text-gray-900 truncate">{job.title}</p>
+        {secondary && <p className="text-sm text-gray-500 mt-0.5">{secondary}</p>}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass}`}>
+            {job.status}
+          </span>
+          {job.employment_type && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              {EMPLOYMENT_LABEL[job.employment_type] || job.employment_type}
+            </span>
+          )}
+        </div>
+      </Link>
+      <div className="flex flex-col items-end gap-3 shrink-0">
+        <div className="text-right">
+          <p className="text-xs text-gray-400 mb-1">Fit score</p>
+          <p className="text-lg font-semibold text-gray-300">
+            {job.fit_score != null ? job.fit_score : '—'}
+          </p>
+        </div>
+        <button
+          onClick={handleReopen}
+          disabled={reopening}
+          className="text-xs text-blue-600 border border-blue-300 rounded px-2 py-1 hover:bg-blue-50 disabled:opacity-50"
+        >
+          {reopening ? 'Reopening...' : 'Reopen'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Jobs() {
-  const { jobs, loading, fetchError, fetchJobs, createJob, creating, createError } = useJobs()
+  const {
+    jobs, loading, fetchError, fetchJobs,
+    createJob, creating, createError,
+    fetchCounts, activeCount, archiveCount,
+    reopenJob,
+  } = useJobs()
+
+  const [view, setView] = useState('active')
   const [filters, setFilters] = useState({ status: '', employment_type: '', conflict_level: '' })
   const [modalOpen, setModalOpen] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
 
   useEffect(() => {
-    fetchJobs(filters)
-  }, [fetchJobs, filters])
+    fetchJobs({ view, ...filters })
+  }, [fetchJobs, view, filters])
+
+  useEffect(() => {
+    fetchCounts()
+  }, [fetchCounts])
+
+  function handleTabChange(newView) {
+    setView(newView)
+    setFilters(prev => ({ ...prev, status: '' }))
+  }
 
   function handleFilterChange(field) {
     return e => setFilters(prev => ({ ...prev, [field]: e.target.value }))
@@ -287,10 +353,36 @@ export default function Jobs() {
     setModalOpen(false)
     setSavedMsg(true)
     setTimeout(() => setSavedMsg(false), 2000)
-    fetchJobs(filters)
+    fetchJobs({ view, ...filters })
+    fetchCounts()
   }
 
+  async function handleReopen(id) {
+    const ok = await reopenJob(id)
+    if (ok) {
+      fetchJobs({ view, ...filters })
+      fetchCounts()
+    }
+  }
+
+  const statusOptions = view === 'active' ? ACTIVE_STATUS_OPTIONS : ARCHIVE_STATUS_OPTIONS
   const hasFilters = filters.status || filters.employment_type || filters.conflict_level
+
+  function emptyMessage() {
+    if (hasFilters) return 'No jobs match the current filters.'
+    return view === 'active'
+      ? 'No active jobs. Click "+ Add Job" to get started.'
+      : 'No archived jobs.'
+  }
+
+  function tabClass(tabView) {
+    const active = view === tabView
+    return `px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+      active
+        ? 'border-blue-600 text-blue-600'
+        : 'border-transparent text-gray-500 hover:text-gray-700'
+    }`
+  }
 
   return (
     <div className="p-6 max-w-4xl">
@@ -304,6 +396,26 @@ export default function Jobs() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-5">
+        <button onClick={() => handleTabChange('active')} className={tabClass('active')}>
+          Active
+          {activeCount != null && (
+            <span className="ml-1.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5">
+              {activeCount}
+            </span>
+          )}
+        </button>
+        <button onClick={() => handleTabChange('archive')} className={tabClass('archive')}>
+          Archive
+          {archiveCount != null && (
+            <span className="ml-1.5 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">
+              {archiveCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Filter bar */}
       <div className="flex gap-3 mb-5 flex-wrap">
         <select
@@ -312,7 +424,7 @@ export default function Jobs() {
           className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All statuses</option>
-          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select
           value={filters.employment_type}
@@ -345,14 +457,13 @@ export default function Jobs() {
       {loading ? (
         <p className="text-sm text-gray-400">Loading...</p>
       ) : jobs.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          {hasFilters
-            ? 'No jobs match the current filters.'
-            : 'No jobs yet. Click "+ Add Job" to get started.'}
-        </p>
+        <p className="text-sm text-gray-500">{emptyMessage()}</p>
       ) : (
         <div className="space-y-3">
-          {jobs.map(job => <JobCard key={job.id} job={job} />)}
+          {view === 'archive'
+            ? jobs.map(job => <ArchiveJobCard key={job.id} job={job} onReopen={handleReopen} />)
+            : jobs.map(job => <JobCard key={job.id} job={job} />)
+          }
         </div>
       )}
 
