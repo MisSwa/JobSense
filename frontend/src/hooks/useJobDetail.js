@@ -4,6 +4,8 @@ export function useJobDetail(id) {
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [updateError, setUpdateError] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -19,5 +21,29 @@ export function useJobDetail(id) {
       .finally(() => setLoading(false))
   }, [id])
 
-  return { job, loading, notFound }
+  async function updateStatus(status) {
+    setUpdating(true)
+    setUpdateError(null)
+    try {
+      const res = await fetch(`/api/jobs/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setUpdateError(data.detail || 'Failed to update status.')
+        return false
+      }
+      setJob(data)
+      return true
+    } catch {
+      setUpdateError('Network error.')
+      return false
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  return { job, loading, notFound, updateStatus, updating, updateError }
 }

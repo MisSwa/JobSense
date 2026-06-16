@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useJobDetail } from '../hooks/useJobDetail'
 
@@ -10,6 +11,16 @@ const STATUS_BADGE = {
   rejected: 'bg-red-100 text-red-700',
   withdrawn: 'bg-gray-100 text-gray-500',
 }
+
+const STATUS_OPTIONS = [
+  { value: 'discovered', label: 'Discovered' },
+  { value: 'applied', label: 'Applied' },
+  { value: 'screening', label: 'Screening' },
+  { value: 'interview', label: 'Interview' },
+  { value: 'offer', label: 'Offer' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'withdrawn', label: 'Withdrawn' },
+]
 
 const EMPLOYMENT_LABEL = {
   fte: 'FTE',
@@ -47,7 +58,16 @@ function formatSalary(min, max) {
 
 export default function JobDetail() {
   const { id } = useParams()
-  const { job, loading, notFound } = useJobDetail(id)
+  const { job, loading, notFound, updateStatus, updating, updateError } = useJobDetail(id)
+  const [savedFlash, setSavedFlash] = useState(false)
+
+  async function handleStatusChange(e) {
+    const ok = await updateStatus(e.target.value)
+    if (ok) {
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 2000)
+    }
+  }
 
   if (loading) {
     return (
@@ -78,12 +98,24 @@ export default function JobDetail() {
         <span className="text-xs text-gray-400">Added {formatDate(job.created_at)}</span>
       </div>
 
-      {/* Title + status */}
-      <div className="flex items-start gap-3 mb-8">
+      {/* Title + status dropdown */}
+      <div className="flex items-start gap-4 mb-8 flex-wrap">
         <h1 className="text-2xl font-semibold text-gray-900 leading-tight">{job.title}</h1>
-        <span className={`mt-1 shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${badgeClass}`}>
-          {job.status}
-        </span>
+        <div className="flex items-center gap-2 mt-1">
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${badgeClass.replace(/text-\S+/, '').replace('bg-', 'bg-').trim()}`} />
+          <select
+            value={job.status}
+            onChange={handleStatusChange}
+            disabled={updating}
+            className={`text-sm font-medium border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${badgeClass} border-transparent`}
+          >
+            {STATUS_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {savedFlash && <span className="text-xs text-green-600 font-medium">Saved</span>}
+          {updateError && <span className="text-xs text-red-600">{updateError}</span>}
+        </div>
       </div>
 
       {/* Two-column grid */}
