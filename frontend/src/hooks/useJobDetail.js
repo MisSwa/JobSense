@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 
-export function useJobDetail(id) {
+export function useJobDetail(id, { onDeleted } = {}) {
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [updateError, setUpdateError] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -45,5 +47,23 @@ export function useJobDetail(id) {
     }
   }
 
-  return { job, loading, notFound, updateStatus, updating, updateError }
+  async function deleteJob() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' })
+      if (res.status === 204) {
+        onDeleted?.()
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      setDeleteError(data.detail || 'Failed to delete job.')
+    } catch {
+      setDeleteError('Network error.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return { job, loading, notFound, updateStatus, updating, updateError, deleteJob, deleting, deleteError }
 }

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +49,17 @@ async def update_job_status(job_id: int, body: JobStatusUpdate, db: AsyncSession
     await db.commit()
     await db.refresh(job)
     return job
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    await db.delete(job)
+    await db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/jobs", response_model=JobOut, status_code=201)

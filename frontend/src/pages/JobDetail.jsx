@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useJobDetail } from '../hooks/useJobDetail'
 
 const STATUS_BADGE = {
@@ -58,8 +58,11 @@ function formatSalary(min, max) {
 
 export default function JobDetail() {
   const { id } = useParams()
-  const { job, loading, notFound, updateStatus, updating, updateError } = useJobDetail(id)
+  const navigate = useNavigate()
+  const { job, loading, notFound, updateStatus, updating, updateError, deleteJob, deleting, deleteError } =
+    useJobDetail(id, { onDeleted: () => navigate('/jobs') })
   const [savedFlash, setSavedFlash] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   async function handleStatusChange(e) {
     const ok = await updateStatus(e.target.value)
@@ -95,7 +98,34 @@ export default function JobDetail() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <Link to="/jobs" className="text-sm text-blue-600 hover:underline">← Back to Jobs</Link>
-        <span className="text-xs text-gray-400">Added {formatDate(job.created_at)}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">Added {formatDate(job.created_at)}</span>
+          {!confirmingDelete ? (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="text-xs text-red-600 border border-red-300 rounded px-2 py-1 hover:bg-red-50"
+            >
+              Delete job
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => { deleteJob(); setConfirmingDelete(false) }}
+                disabled={deleting}
+                className="text-xs text-red-600 border border-red-300 rounded px-2 py-1 hover:bg-red-50 disabled:opacity-50"
+              >
+                Confirm delete?
+              </button>
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="text-xs text-gray-500 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              {deleteError && <span className="text-xs text-red-600">{deleteError}</span>}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Title + status dropdown */}
