@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useJobs } from '../hooks/useJobs'
 
 const EMPLOYMENT_OPTIONS = [
@@ -240,7 +241,10 @@ function JobCard({ job }) {
   const secondary = [job.company, job.location].filter(Boolean).join(' · ')
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg px-5 py-4 flex items-start justify-between gap-4">
+    <Link
+      to={`/jobs/${job.id}`}
+      className="block bg-white border border-gray-200 rounded-lg px-5 py-4 flex items-start justify-between gap-4 hover:border-blue-300 hover:shadow-sm transition-shadow"
+    >
       <div className="min-w-0">
         <p className="font-semibold text-gray-900 truncate">{job.title}</p>
         {secondary && <p className="text-sm text-gray-500 mt-0.5">{secondary}</p>}
@@ -261,7 +265,7 @@ function JobCard({ job }) {
           {job.fit_score != null ? job.fit_score : '—'}
         </p>
       </div>
-    </div>
+    </Link>
   )
 }
 
